@@ -2,12 +2,11 @@
 
 TGBOTTOKEN = 'Telegram_bot_token'
 TGBOTUSERNAME = 'myvkbot'
-TGMYCHATID = 123456
 
 VKAPIVER = '5.67'
 VKTOKEN = 'VK_token'
 VKGROUPTOKEN = 'VK_group_token'
-VKMYID = 654321
+VKMYID = 0
 
 TIMETRESHOLD = 1
 
