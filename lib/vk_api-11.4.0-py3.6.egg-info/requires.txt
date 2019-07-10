@@ -1,0 +1,9 @@
+requests
+enum34
+six
+
+[vkaudio]
+beautifulsoup4
+
+[vkstreaming]
+websocket-client
