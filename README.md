@@ -46,7 +46,7 @@
 
 **VKTOKEN** — ключ доступа VK (access_token). См.: https://vk.com/dev/access_token
 
-**VKGROUPTOKEN** — Ключ доступа сообщества (VK-бот по сути является сообществом). См.: https://vk.com/dev/access_token
+**VKGROUPTOKEN** — ключ доступа сообщества (VK-бот по сути является сообществом). См.: https://vk.com/dev/access_token
 
 **VKMYID** — id вашего VK-аккаунта. Необязательный параметр.
 
