@@ -10,6 +10,9 @@ VKMYID = 0
 
 TIMETRESHOLD = 1
 
+confirmation = {}
+confirmation[1234567890] = '6a4c28df'
+
 wallpost = {}
 wallpost[1234567890] = -1000002222
 

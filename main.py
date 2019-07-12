@@ -18,7 +18,7 @@ from requests_toolbelt.adapters import appengine
 
 from config import TGBOTUSERNAME, TGBOTTOKEN
 from config import VKAPIVER, VKTOKEN, VKGROUPTOKEN, VKMYID, TIMETRESHOLD
-from config import wallpost, comment, tg2vkid
+from config import confirmation, wallpost, comment, tg2vkid
 
 TGAPIURL = 'https://api.telegram.org/bot'
 VKWALLURL = 'https://vk.com/wall-'
@@ -164,6 +164,12 @@ class vkHandler(webapp2.RequestHandler):
         logging.info(json.dumps(body, indent=4))
 
         groupid = body['group_id']
+
+        # webhook confirmation
+        if body['type'] == 'confirmation' and groupid in confirmation:
+            self.response.write(confirmation[groupid])
+            return
+
         post = body['object']
         vkchatid = post.get('peer_id')
         text = post.get('text')
