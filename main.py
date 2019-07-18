@@ -263,11 +263,25 @@ class vkHandler(webapp2.RequestHandler):
                         dbmsg.put()
 
             # forwards
-            for vkfwdmsg in post.get('fwd_messages'):
-                vkfwdfrom = vkfwdmsg['from_id']
-                vkfwdname = getVkName(vkfwdfrom)
-                vkfwdtext = vkfwdmsg['text']
-                tgMsg(msg=boldnamec + '[forward] ' + vkfwdname + ": "+ vkfwdtext, chatid=vk2tgid[vkchatid])
+            for fwdmsg in post.get('fwd_messages'):
+                fwdfrom = fwdmsg['from_id']
+                fwdname = getVkName(fwdfrom)
+                fwdtext = fwdmsg['text']
+                if fwdtext != '':
+                    tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + fwdtext, chatid=vk2tgid[vkchatid])
+
+                for attachment in fwdmsg['attachments']:
+                    if attachment['type'] == 'photo':
+                        tgPhoto(url=getVkPhotoUrl(attachment), caption=boldnamec + u'[forward] Фото от ' + fwdname, chatid=vk2tgid[vkchatid])
+                    elif attachment['type'] == 'sticker':
+                        tgPhoto(url=getVkStickerUrl(attachment), caption=boldnamec + u'[forward] Стикер от ' + fwdname, chatid=vk2tgid[vkchatid])
+                    elif attachment['type'] == 'link':
+                        if text == '':
+                            tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + attachment['link']['url'], chatid=vk2tgid[vkchatid])
+                    elif attachment['type'] == 'wall':
+                        tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=vk2tgid[vkchatid])
+                    else:
+                        tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': [' + attachment['type'] + ']', chatid=vk2tgid[vkchatid])
 
             if text != '':
                 msg = boldnamec + text
