@@ -362,7 +362,11 @@ class tgHandler(webapp2.RequestHandler):
 
                 if sticker:
                     text = sticker.get('emoji', '')
-                    dfile = urlopen(tgGetFile(sticker.get('file_id')))
+                    if sticker['is_animated']:
+                        stickerfileid = sticker['thumb']['file_id']
+                    else:
+                        stickerfileid = sticker['file_id']
+                    dfile = urlopen(tgGetFile(stickerfileid))
                     vkphoto = upload.photo_messages(dfile)
                     if vkphoto[0]:
                         attachment = 'photo' + str(vkphoto[0]['owner_id']) + '_' + str(vkphoto[0]['id'])
