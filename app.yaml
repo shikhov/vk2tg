@@ -14,4 +14,4 @@ libraries:
   version: latest
 
 skip_files:
-- example.config.py
+- .git

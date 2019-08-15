@@ -71,6 +71,15 @@ def tgPhoto(url, caption, chatid, token=TGBOTTOKEN):
     })).read()
     return json.loads(response)
 
+def tgLocation(lat, lon, chatid, token=TGBOTTOKEN, reply_to=0):
+    response = urlopen(TGAPIURL + token + '/sendLocation', urlencode({
+        'chat_id': chatid,
+        'latitude': lat,
+        'longitude': lon,
+        'reply_to_message_id': reply_to
+    })).read()
+    return json.loads(response)
+
 def tgGetFile(fileid):
     resp = json.loads(urlopen(TGAPIURL + TGBOTTOKEN + '/getFile', urlencode({'file_id': fileid})).read())
     if resp['ok']:
@@ -177,6 +186,7 @@ class vkHandler(webapp2.RequestHandler):
         parentid = str(post.get('post_id'))
         fromid = post.get('from_id')
         createdby = post.get('created_by')
+        geo = post.get('geo')
 
         name = getVkName(fromid)
         boldname = '<b>' + name + '</b>'
@@ -290,6 +300,16 @@ class vkHandler(webapp2.RequestHandler):
                 checksum = adler32(text.encode('utf-8'))
                 dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp, checksum=checksum)
                 dbmsg.put()
+
+            if geo:
+                lat = geo['coordinates']['latitude']
+                lon = geo['coordinates']['longitude']
+                tgresult = tgLocation(lat=lat, lon=lon, chatid=vk2tgid[vkchatid], reply_to=reply_to)
+                tgmsgid = tgresult['result']['message_id']
+                checksum = adler32(text.encode('utf-8'))
+                dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp, checksum=checksum)
+                dbmsg.put()
+                tgMsg(msg=u'Местоположение от ' + boldname, chatid=vk2tgid[vkchatid])
 
             for attachment in post['attachments']:
                 if attachment['type'] == 'photo':
