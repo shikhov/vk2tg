@@ -166,6 +166,58 @@ def getTgName(msgfrom):
         name = first_name + " " + last_name
     return cleanUnicode(name)
 
+def findReplyID(post, vkchatid, vk2tgid):
+    reply_to = 0
+    if 'reply_message' in post:
+        vkreplyid = post['reply_message']['conversation_message_id']
+        vkreplyfrom = post['reply_message']['from_id']
+        vkreplyname = getVkName(vkreplyfrom)
+        vkreplytime = post['reply_message']['date']
+        vkreplytext = post['reply_message']['text']
+
+        # trying to find by message id
+        dbmsgs = Message.query(Message.vkmsgid == vkreplyid, Message.vkchatid == vkchatid, Message.tgchatid == vk2tgid[vkchatid]).fetch(1)
+        for dbmsg in dbmsgs:
+            reply_to = dbmsg.tgmsgid
+            vkreplychecksum = adler32(vkreplytext.encode('utf-8'))
+            if vkreplychecksum != dbmsg.checksum:
+                # message edited
+                tgEditMsg(chatid=vk2tgid[vkchatid], msgid=reply_to, text='<b>' + vkreplyname + ':</b> ' + vkreplytext)
+                dbmsg.checksum = vkreplychecksum
+                dbmsg.put()
+
+        # trying to find by timestamp and checksum
+        if reply_to == 0:
+            vkreplychecksum = adler32(vkreplytext.encode('utf-8'))
+            dbmsgs = Message.query(ndb.AND(Message.vkchatid == vkchatid, Message.tgchatid == vk2tgid[vkchatid], Message.checksum == vkreplychecksum, ndb.OR(Message.timestamp == vkreplytime, Message.timestamp == vkreplytime + TIMETRESHOLD))).fetch()
+            for dbmsg in dbmsgs:
+                reply_to = dbmsg.tgmsgid
+                dbmsg.vkmsgid = vkreplyid
+                dbmsg.put()
+
+    return reply_to
+
+def vkProcessForwards(post, boldnamec, vk2tgid, vkchatid, text):
+    for fwdmsg in post.get('fwd_messages'):
+        fwdfrom = fwdmsg['from_id']
+        fwdname = getVkName(fwdfrom)
+        fwdtext = fwdmsg['text']
+        if fwdtext != '':
+            tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + fwdtext, chatid=vk2tgid[vkchatid])
+
+        for attachment in fwdmsg['attachments']:
+            if attachment['type'] == 'photo':
+                tgPhoto(url=getVkPhotoUrl(attachment), caption=boldnamec + u'[forward] Фото от ' + fwdname, chatid=vk2tgid[vkchatid])
+            elif attachment['type'] == 'sticker':
+                tgPhoto(url=getVkStickerUrl(attachment), caption=boldnamec + u'[forward] Стикер от ' + fwdname, chatid=vk2tgid[vkchatid])
+            elif attachment['type'] == 'link':
+                if text == '':
+                    tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + attachment['link']['url'], chatid=vk2tgid[vkchatid])
+            elif attachment['type'] == 'wall':
+                tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=vk2tgid[vkchatid])
+            else:
+                tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': [' + attachment['type'] + ']', chatid=vk2tgid[vkchatid])
+
 
 class vkHandler(webapp2.RequestHandler):
     def post(self):
@@ -241,57 +293,12 @@ class vkHandler(webapp2.RequestHandler):
         if body['type'] == 'message_new' and vkchatid in vk2tgid:
             vkmsgid = post['conversation_message_id']
             timestamp = int(time())
-            reply_to = 0
 
             # replies
-            if 'reply_message' in post:
-                vkreplyid = post['reply_message']['conversation_message_id']
-                vkreplyfrom = post['reply_message']['from_id']
-                vkreplyname = getVkName(vkreplyfrom)
-                vkreplytime = post['reply_message']['date']
-                vkreplytext = post['reply_message']['text']
-                logging.info('vkreplyid: %s', str(vkreplyid))
-
-                # trying to find by message id
-                dbmsgs = Message.query(Message.vkmsgid == vkreplyid, Message.vkchatid == vkchatid, Message.tgchatid == vk2tgid[vkchatid]).fetch(1)
-                for dbmsg in dbmsgs:
-                    reply_to = dbmsg.tgmsgid
-                    vkreplychecksum = adler32(vkreplytext.encode('utf-8'))
-                    if vkreplychecksum != dbmsg.checksum:
-                        # message edited
-                        tgEditMsg(chatid=vk2tgid[vkchatid], msgid=reply_to, text='<b>' + vkreplyname + ':</b> ' + vkreplytext)
-                        dbmsg.checksum = vkreplychecksum
-                        dbmsg.put()
-
-                # trying to find by timestamp and checksum
-                if reply_to == 0:
-                    vkreplychecksum = adler32(vkreplytext.encode('utf-8'))
-                    dbmsgs = Message.query(ndb.AND(Message.vkchatid == vkchatid, Message.tgchatid == vk2tgid[vkchatid], Message.checksum == vkreplychecksum, ndb.OR(Message.timestamp == vkreplytime, Message.timestamp == vkreplytime + TIMETRESHOLD))).fetch()
-                    for dbmsg in dbmsgs:
-                        reply_to = dbmsg.tgmsgid
-                        dbmsg.vkmsgid = vkreplyid
-                        dbmsg.put()
+            reply_to = findReplyID(post, vkchatid, vk2tgid)
 
             # forwards
-            for fwdmsg in post.get('fwd_messages'):
-                fwdfrom = fwdmsg['from_id']
-                fwdname = getVkName(fwdfrom)
-                fwdtext = fwdmsg['text']
-                if fwdtext != '':
-                    tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + fwdtext, chatid=vk2tgid[vkchatid])
-
-                for attachment in fwdmsg['attachments']:
-                    if attachment['type'] == 'photo':
-                        tgPhoto(url=getVkPhotoUrl(attachment), caption=boldnamec + u'[forward] Фото от ' + fwdname, chatid=vk2tgid[vkchatid])
-                    elif attachment['type'] == 'sticker':
-                        tgPhoto(url=getVkStickerUrl(attachment), caption=boldnamec + u'[forward] Стикер от ' + fwdname, chatid=vk2tgid[vkchatid])
-                    elif attachment['type'] == 'link':
-                        if text == '':
-                            tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + attachment['link']['url'], chatid=vk2tgid[vkchatid])
-                    elif attachment['type'] == 'wall':
-                        tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=vk2tgid[vkchatid])
-                    else:
-                        tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': [' + attachment['type'] + ']', chatid=vk2tgid[vkchatid])
+            vkProcessForwards(post, boldnamec, vk2tgid, vkchatid, text)
 
             if text != '':
                 msg = boldnamec + text
@@ -328,6 +335,23 @@ class vkHandler(webapp2.RequestHandler):
                 dbmsg.put()
 
         self.response.write('ok')
+
+    def newmethod913(self, post, boldname, vk2tgid, vkchatid, text, boldnamec, tgresult, vkmsgid, timestamp):
+        for attachment in post['attachments']:
+            if attachment['type'] == 'photo':
+                tgresult = tgPhoto(url=getVkPhotoUrl(attachment), caption=u'Фото от ' + boldname, chatid=vk2tgid[vkchatid])
+            elif attachment['type'] == 'sticker':
+                tgresult = tgPhoto(url=getVkStickerUrl(attachment), caption=u'Стикер от ' + boldname, chatid=vk2tgid[vkchatid])
+            elif attachment['type'] == 'link':
+                if text == '':
+                    tgresult = tgMsg(msg=boldnamec + attachment['link']['url'], chatid=vk2tgid[vkchatid])
+            elif attachment['type'] == 'wall':
+                tgresult = tgMsg(msg=boldnamec + 'https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=vk2tgid[vkchatid])
+            else:
+                tgresult = tgMsg(msg=boldnamec + '[' + attachment['type'] + ']', chatid=vk2tgid[vkchatid])
+            tgmsgid = tgresult['result']['message_id']
+            dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp)
+            dbmsg.put()
 
 
 class tgHandler(webapp2.RequestHandler):
