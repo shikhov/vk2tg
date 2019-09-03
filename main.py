@@ -336,23 +336,6 @@ class vkHandler(webapp2.RequestHandler):
 
         self.response.write('ok')
 
-    def newmethod913(self, post, boldname, vk2tgid, vkchatid, text, boldnamec, tgresult, vkmsgid, timestamp):
-        for attachment in post['attachments']:
-            if attachment['type'] == 'photo':
-                tgresult = tgPhoto(url=getVkPhotoUrl(attachment), caption=u'Фото от ' + boldname, chatid=vk2tgid[vkchatid])
-            elif attachment['type'] == 'sticker':
-                tgresult = tgPhoto(url=getVkStickerUrl(attachment), caption=u'Стикер от ' + boldname, chatid=vk2tgid[vkchatid])
-            elif attachment['type'] == 'link':
-                if text == '':
-                    tgresult = tgMsg(msg=boldnamec + attachment['link']['url'], chatid=vk2tgid[vkchatid])
-            elif attachment['type'] == 'wall':
-                tgresult = tgMsg(msg=boldnamec + 'https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=vk2tgid[vkchatid])
-            else:
-                tgresult = tgMsg(msg=boldnamec + '[' + attachment['type'] + ']', chatid=vk2tgid[vkchatid])
-            tgmsgid = tgresult['result']['message_id']
-            dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp)
-            dbmsg.put()
-
 
 class tgHandler(webapp2.RequestHandler):
     def post(self):
