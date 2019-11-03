@@ -222,7 +222,7 @@ def vkProcessForwards(post, boldnamec, vk2tgid, vkchatid, text):
 class vkHandler(webapp2.RequestHandler):
     def post(self):
         body = json.loads(self.request.body)
-        logging.info(json.dumps(body, indent=4))
+        logging.info(json.dumps(body, indent=4).decode('unicode-escape'))
 
         groupid = body['group_id']
 
@@ -340,7 +340,7 @@ class vkHandler(webapp2.RequestHandler):
 class tgHandler(webapp2.RequestHandler):
     def post(self):
         body = json.loads(self.request.body)
-        logging.info(json.dumps(body, indent=4))
+        logging.info(json.dumps(body, indent=4).decode('unicode-escape'))
 
         if 'message' in body:
             message = body['message']
