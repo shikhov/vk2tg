@@ -33,7 +33,7 @@ class Message(ndb.Model):
     tgchatid = ndb.IntegerProperty()
     vkchatid = ndb.IntegerProperty()
     timestamp = ndb.IntegerProperty()
-    checksum = ndb.IntegerProperty()
+    checksum = ndb.IntegerProperty(default=1)
 
 class vkUser(ndb.Model):
     name = ndb.StringProperty()
