@@ -25,6 +25,7 @@ from httplib import HTTPException
 TGAPIURL = 'https://api.telegram.org/bot'
 VKWALLURL = 'https://vk.com/wall-'
 VKAPIURL = 'https://api.vk.com/method/'
+MIMETYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/tiff', 'image/webp']
 
 appengine.monkeypatch()
 warnings.filterwarnings('ignore', r'urllib3 is using URLFetch', urllib3.contrib.appengine.AppEnginePlatformWarning)
@@ -423,7 +424,14 @@ class tgHandler(webapp2.RequestHandler):
                     text = caption
 
                 if document:
-                    text = '[file] ' + caption
+                    if document['mime_type'] in MIMETYPES:
+                        dfile = urlopen(tgGetFile(document['file_id']))
+                        vkphoto = upload.photo_messages(dfile)
+                        if vkphoto[0]:
+                            attachment = 'photo' + str(vkphoto[0]['owner_id']) + '_' + str(vkphoto[0]['id'])
+                        text = caption
+                    else:
+                        text = '[file] ' + caption
 
                 if video:
                     text = '[video] ' + caption
