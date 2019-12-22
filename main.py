@@ -12,6 +12,7 @@ from zlib import adler32
 import urllib3.contrib.appengine
 import vk_api
 from google.appengine.ext import ndb
+from google.appengine.api import urlfetch
 
 import webapp2
 from requests_toolbelt.adapters import appengine
@@ -19,6 +20,7 @@ from requests_toolbelt.adapters import appengine
 from config import TGBOTUSERNAME, TGBOTTOKEN
 from config import VKAPIVER, VKTOKEN, VKGROUPTOKEN, VKMYID, TIMETRESHOLD
 from config import confirmation, wallpost, comment, tg2vkid
+from httplib import HTTPException
 
 TGAPIURL = 'https://api.telegram.org/bot'
 VKWALLURL = 'https://vk.com/wall-'
@@ -68,6 +70,14 @@ def tgPhoto(url, caption, chatid, token=TGBOTTOKEN):
         'photo': url,
         'caption': caption.encode('utf-8'),
         'parse_mode': 'HTML',
+    })).read()
+    return json.loads(response)
+
+def tgMediaGroup(media, chatid, token=TGBOTTOKEN):
+    urlfetch.set_default_fetch_deadline(60)
+    response = urlopen(TGAPIURL + token + '/sendMediaGroup', urlencode({
+        'chat_id': chatid,
+        'media': media,
     })).read()
     return json.loads(response)
 
@@ -224,13 +234,32 @@ class vkHandler(webapp2.RequestHandler):
         body = json.loads(self.request.body)
         logging.info(json.dumps(body, indent=4).decode('unicode-escape'))
 
-        groupid = body['group_id']
-
         # webhook confirmation
+        groupid = body['group_id']
         if body['type'] == 'confirmation' and groupid in confirmation:
             self.response.write(confirmation[groupid])
             return
 
+        try:
+            urlopen(self.request.uri + '/vkmain', self.request.body, timeout=1)
+        except HTTPException:
+            pass
+
+        self.response.write('ok')
+
+
+class vkMain(webapp2.RequestHandler):
+    def post(self):
+        body = json.loads(self.request.body)
+
+        vk2tgid = {}
+        for tgchatid in tg2vkid:
+            vk2tgid[2000000000 + tg2vkid[tgchatid]] = tgchatid
+
+        post = body['object']
+        text = post.get('text')
+        vkchatid = post.get('peer_id')
+        groupid = body['group_id']
         post = body['object']
         vkchatid = post.get('peer_id')
         text = post.get('text')
@@ -300,11 +329,12 @@ class vkHandler(webapp2.RequestHandler):
             # forwards
             vkProcessForwards(post, boldnamec, vk2tgid, vkchatid, text)
 
-            if text != '':
+            checksum = adler32(text.encode('utf-8'))
+
+            if text:
                 msg = boldnamec + text
                 tgresult = tgMsg(msg=msg, chatid=vk2tgid[vkchatid], reply_to=reply_to)
                 tgmsgid = tgresult['result']['message_id']
-                checksum = adler32(text.encode('utf-8'))
                 dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp, checksum=checksum)
                 dbmsg.put()
 
@@ -313,14 +343,20 @@ class vkHandler(webapp2.RequestHandler):
                 lon = geo['coordinates']['longitude']
                 tgresult = tgLocation(lat=lat, lon=lon, chatid=vk2tgid[vkchatid], reply_to=reply_to)
                 tgmsgid = tgresult['result']['message_id']
-                checksum = adler32(text.encode('utf-8'))
                 dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp, checksum=checksum)
                 dbmsg.put()
                 tgMsg(msg=u'Местоположение от ' + boldname, chatid=vk2tgid[vkchatid])
 
+            photoCaption = u'Фото от ' + boldname
+            media = []
             for attachment in post['attachments']:
+                tgresult = ''
                 if attachment['type'] == 'photo':
-                    tgresult = tgPhoto(url=getVkPhotoUrl(attachment), caption=u'Фото от ' + boldname, chatid=vk2tgid[vkchatid])
+                    vkPhotoUrl = getVkPhotoUrl(attachment)
+                    if media:
+                        media.append({'media':vkPhotoUrl,'type':'photo'})
+                    else:
+                        media.append({'media':vkPhotoUrl,'type':'photo','caption':photoCaption,'parse_mode':'HTML'})
                 elif attachment['type'] == 'sticker':
                     tgresult = tgPhoto(url=getVkStickerUrl(attachment), caption=u'Стикер от ' + boldname, chatid=vk2tgid[vkchatid])
                 elif attachment['type'] == 'link':
@@ -330,11 +366,22 @@ class vkHandler(webapp2.RequestHandler):
                     tgresult = tgMsg(msg=boldnamec + 'https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=vk2tgid[vkchatid])
                 else:
                     tgresult = tgMsg(msg=boldnamec + '[' + attachment['type'] + ']', chatid=vk2tgid[vkchatid])
+
+                if tgresult:
+                    tgmsgid = tgresult['result']['message_id']
+                    dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp)
+                    dbmsg.put()
+
+            if len(media) > 1:
+                tgresult = tgMediaGroup(media=json.dumps(media), chatid=vk2tgid[vkchatid])
+                tgmsgid = tgresult['result'][0]['message_id']
+                dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp)
+                dbmsg.put()
+            if len(media) == 1:
+                tgresult = tgPhoto(url=vkPhotoUrl, caption=photoCaption, chatid=vk2tgid[vkchatid])
                 tgmsgid = tgresult['result']['message_id']
                 dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp)
                 dbmsg.put()
-
-        self.response.write('ok')
 
 
 class tgHandler(webapp2.RequestHandler):
@@ -422,5 +469,6 @@ class tgHandler(webapp2.RequestHandler):
 
 app = webapp2.WSGIApplication([
     ('/', vkHandler),
-    ('/tghook', tgHandler)
+    ('/tghook', tgHandler),
+    ('/vkmain', vkMain)
 ])
