@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import warnings
+from httplib import HTTPException
 from time import time
 from urllib import urlencode
 from urllib2 import urlopen
@@ -11,19 +12,17 @@ from zlib import adler32
 
 import urllib3.contrib.appengine
 import vk_api
-from google.appengine.ext import ndb
-from google.appengine.api import urlfetch
-
 import webapp2
+from google.appengine.api import urlfetch
+from google.appengine.ext import ndb
 from requests_toolbelt.adapters import appengine
 
-from config import TGBOTUSERNAME, TGBOTTOKEN
-from config import VKAPIVER, VKTOKEN, VKGROUPTOKEN, VKMYID, TIMETRESHOLD
-from config import confirmation, wallpost, comment, tg2vkid
-from httplib import HTTPException
+from config import (TGBOTTOKEN, TGBOTUSERNAME, TIMETRESHOLD, VKAPIVER,
+                    VKGROUPTOKEN, VKMYID, VKTOKEN, comment, confirmation,
+                    tg2vkid, wallpost)
 
 TGAPIURL = 'https://api.telegram.org/bot'
-VKWALLURL = 'https://vk.com/wall-'
+VKWALL = 'https://vk.com/wall'
 VKAPIURL = 'https://api.vk.com/method/'
 MIMETYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/tiff', 'image/webp']
 
@@ -225,7 +224,7 @@ def vkProcessForwards(post, boldnamec, tgchatid, text):
                 if text == '':
                     tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + attachment['link']['url'], chatid=tgchatid)
             elif attachment['type'] == 'wall':
-                tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=tgchatid)
+                tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + VKWALL + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=tgchatid)
             else:
                 tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': [' + attachment['type'] + ']', chatid=tgchatid)
 
@@ -284,7 +283,7 @@ class vkMain(webapp2.RequestHandler):
             else:
                 groupname = getVkName(post['owner_id'])
                 nmcreatedby = getVkName(createdby)
-                msg = '<b>' + groupname + ' / ' + nmcreatedby + '</b>\n' + text + '\n' + VKWALLURL + str(groupid) + '_' + postid
+                msg = '<b>' + groupname + ' / ' + nmcreatedby + '</b>\n' + text + '\n' + VKWALL + str(-groupid) + '_' + postid
                 if 'attachments' in post and post['attachments'][0]['type'] == 'photo':
                     photoUrl = getVkPhotoUrl(post['attachments'][0])
                     if photoUrl != '':
@@ -300,7 +299,7 @@ class vkMain(webapp2.RequestHandler):
 
         # comment
         if body['type'] == 'wall_reply_new' or body['type'] == 'photo_comment_new':
-            commenturl = VKWALLURL + str(groupid) + '_' + parentid + '?reply=' + postid
+            commenturl = VKWALL + str(-groupid) + '_' + parentid + '?reply=' + postid
             if text:
                 tgMsg(msg=boldnamec + text + '\n' + commenturl, chatid=comment[groupid], disable_preview='true')
             for attachment in post.get('attachments', []):
@@ -311,7 +310,7 @@ class vkMain(webapp2.RequestHandler):
                 elif attachment['type'] == 'link':
                     tgMsg(msg=boldnamec + attachment['link']['url'] + '\n' + commenturl, chatid=comment[groupid])
                 elif attachment['type'] == 'wall':
-                    tgMsg(msg=boldnamec + 'https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id'] + '\n' + commenturl), chatid=comment[groupid])
+                    tgMsg(msg=boldnamec + VKWALL + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id'] + '\n' + commenturl), chatid=comment[groupid])
                 else:
                     tgMsg(msg=boldnamec + '[' + attachment['type'] + ']\n' + commenturl, chatid=comment[groupid])
 
@@ -361,7 +360,7 @@ class vkMain(webapp2.RequestHandler):
                     if text == '':
                         tgresult = tgMsg(msg=boldnamec + attachment['link']['url'], chatid=tgchatid)
                 elif attachment['type'] == 'wall':
-                    tgresult = tgMsg(msg=boldnamec + 'https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=tgchatid)
+                    tgresult = tgMsg(msg=boldnamec + VKWALL + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=tgchatid)
                 else:
                     tgresult = tgMsg(msg=boldnamec + '[' + attachment['type'] + ']', chatid=tgchatid)
 
