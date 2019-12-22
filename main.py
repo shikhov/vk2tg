@@ -176,7 +176,7 @@ def getTgName(msgfrom):
         name = first_name + " " + last_name
     return cleanUnicode(name)
 
-def findReplyID(post, vkchatid, vk2tgid):
+def findReplyID(post, vkchatid, tgchatid):
     reply_to = 0
     if 'reply_message' in post:
         vkreplyid = post['reply_message']['conversation_message_id']
@@ -186,20 +186,20 @@ def findReplyID(post, vkchatid, vk2tgid):
         vkreplytext = post['reply_message']['text']
 
         # trying to find by message id
-        dbmsgs = Message.query(Message.vkmsgid == vkreplyid, Message.vkchatid == vkchatid, Message.tgchatid == vk2tgid[vkchatid]).fetch(1)
+        dbmsgs = Message.query(Message.vkmsgid == vkreplyid, Message.vkchatid == vkchatid, Message.tgchatid == tgchatid).fetch(1)
         for dbmsg in dbmsgs:
             reply_to = dbmsg.tgmsgid
             vkreplychecksum = adler32(vkreplytext.encode('utf-8'))
             if vkreplychecksum != dbmsg.checksum:
                 # message edited
-                tgEditMsg(chatid=vk2tgid[vkchatid], msgid=reply_to, text='<b>' + vkreplyname + ':</b> ' + vkreplytext)
+                tgEditMsg(chatid=tgchatid, msgid=reply_to, text='<b>' + vkreplyname + ':</b> ' + vkreplytext)
                 dbmsg.checksum = vkreplychecksum
                 dbmsg.put()
 
         # trying to find by timestamp and checksum
         if reply_to == 0:
             vkreplychecksum = adler32(vkreplytext.encode('utf-8'))
-            dbmsgs = Message.query(ndb.AND(Message.vkchatid == vkchatid, Message.tgchatid == vk2tgid[vkchatid], Message.checksum == vkreplychecksum, ndb.OR(Message.timestamp == vkreplytime, Message.timestamp == vkreplytime + TIMETRESHOLD))).fetch()
+            dbmsgs = Message.query(ndb.AND(Message.vkchatid == vkchatid, Message.tgchatid == tgchatid, Message.checksum == vkreplychecksum, ndb.OR(Message.timestamp == vkreplytime, Message.timestamp == vkreplytime + TIMETRESHOLD))).fetch()
             for dbmsg in dbmsgs:
                 reply_to = dbmsg.tgmsgid
                 dbmsg.vkmsgid = vkreplyid
@@ -207,26 +207,26 @@ def findReplyID(post, vkchatid, vk2tgid):
 
     return reply_to
 
-def vkProcessForwards(post, boldnamec, vk2tgid, vkchatid, text):
+def vkProcessForwards(post, boldnamec, tgchatid, text):
     for fwdmsg in post.get('fwd_messages'):
         fwdfrom = fwdmsg['from_id']
         fwdname = getVkName(fwdfrom)
         fwdtext = fwdmsg['text']
         if fwdtext != '':
-            tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + fwdtext, chatid=vk2tgid[vkchatid])
+            tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + fwdtext, chatid=tgchatid)
 
         for attachment in fwdmsg['attachments']:
             if attachment['type'] == 'photo':
-                tgPhoto(url=getVkPhotoUrl(attachment), caption=boldnamec + u'[forward] Фото от ' + fwdname, chatid=vk2tgid[vkchatid])
+                tgPhoto(url=getVkPhotoUrl(attachment), caption=boldnamec + u'[forward] Фото от ' + fwdname, chatid=tgchatid)
             elif attachment['type'] == 'sticker':
-                tgPhoto(url=getVkStickerUrl(attachment), caption=boldnamec + u'[forward] Стикер от ' + fwdname, chatid=vk2tgid[vkchatid])
+                tgPhoto(url=getVkStickerUrl(attachment), caption=boldnamec + u'[forward] Стикер от ' + fwdname, chatid=tgchatid)
             elif attachment['type'] == 'link':
                 if text == '':
-                    tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + attachment['link']['url'], chatid=vk2tgid[vkchatid])
+                    tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': ' + attachment['link']['url'], chatid=tgchatid)
             elif attachment['type'] == 'wall':
-                tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=vk2tgid[vkchatid])
+                tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=tgchatid)
             else:
-                tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': [' + attachment['type'] + ']', chatid=vk2tgid[vkchatid])
+                tgMsg(msg=boldnamec + '[forward] ' + fwdname + ': [' + attachment['type'] + ']', chatid=tgchatid)
 
 
 class vkHandler(webapp2.RequestHandler):
@@ -251,10 +251,6 @@ class vkHandler(webapp2.RequestHandler):
 class vkMain(webapp2.RequestHandler):
     def post(self):
         body = json.loads(self.request.body)
-
-        vk2tgid = {}
-        for tgchatid in tg2vkid:
-            vk2tgid[2000000000 + tg2vkid[tgchatid]] = tgchatid
 
         post = body['object']
         text = post.get('text')
@@ -320,32 +316,33 @@ class vkMain(webapp2.RequestHandler):
 
         # chat message
         if body['type'] == 'message_new' and vkchatid in vk2tgid:
-            vkmsgid = post['conversation_message_id']
             timestamp = int(time())
+            vkmsgid = post['conversation_message_id']
+            tgchatid = vk2tgid[vkchatid]
 
             # replies
-            reply_to = findReplyID(post, vkchatid, vk2tgid)
+            reply_to = findReplyID(post, vkchatid, tgchatid)
 
             # forwards
-            vkProcessForwards(post, boldnamec, vk2tgid, vkchatid, text)
+            vkProcessForwards(post, boldnamec, tgchatid, text)
 
             checksum = adler32(text.encode('utf-8'))
 
             if text:
                 msg = boldnamec + text
-                tgresult = tgMsg(msg=msg, chatid=vk2tgid[vkchatid], reply_to=reply_to)
+                tgresult = tgMsg(msg=msg, chatid=tgchatid, reply_to=reply_to)
                 tgmsgid = tgresult['result']['message_id']
-                dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp, checksum=checksum)
+                dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=tgchatid, vkchatid=vkchatid, timestamp=timestamp, checksum=checksum)
                 dbmsg.put()
 
             if geo:
                 lat = geo['coordinates']['latitude']
                 lon = geo['coordinates']['longitude']
-                tgresult = tgLocation(lat=lat, lon=lon, chatid=vk2tgid[vkchatid], reply_to=reply_to)
+                tgresult = tgLocation(lat=lat, lon=lon, chatid=tgchatid, reply_to=reply_to)
                 tgmsgid = tgresult['result']['message_id']
-                dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp, checksum=checksum)
+                dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=tgchatid, vkchatid=vkchatid, timestamp=timestamp, checksum=checksum)
                 dbmsg.put()
-                tgMsg(msg=u'Местоположение от ' + boldname, chatid=vk2tgid[vkchatid])
+                tgMsg(msg=u'Местоположение от ' + boldname, chatid=tgchatid)
 
             photoCaption = u'Фото от ' + boldname
             media = []
@@ -358,29 +355,29 @@ class vkMain(webapp2.RequestHandler):
                     else:
                         media.append({'media':vkPhotoUrl,'type':'photo','caption':photoCaption,'parse_mode':'HTML'})
                 elif attachment['type'] == 'sticker':
-                    tgresult = tgPhoto(url=getVkStickerUrl(attachment), caption=u'Стикер от ' + boldname, chatid=vk2tgid[vkchatid])
+                    tgresult = tgPhoto(url=getVkStickerUrl(attachment), caption=u'Стикер от ' + boldname, chatid=tgchatid)
                 elif attachment['type'] == 'link':
                     if text == '':
-                        tgresult = tgMsg(msg=boldnamec + attachment['link']['url'], chatid=vk2tgid[vkchatid])
+                        tgresult = tgMsg(msg=boldnamec + attachment['link']['url'], chatid=tgchatid)
                 elif attachment['type'] == 'wall':
-                    tgresult = tgMsg(msg=boldnamec + 'https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=vk2tgid[vkchatid])
+                    tgresult = tgMsg(msg=boldnamec + 'https://vk.com/wall' + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id']), chatid=tgchatid)
                 else:
-                    tgresult = tgMsg(msg=boldnamec + '[' + attachment['type'] + ']', chatid=vk2tgid[vkchatid])
+                    tgresult = tgMsg(msg=boldnamec + '[' + attachment['type'] + ']', chatid=tgchatid)
 
                 if tgresult:
                     tgmsgid = tgresult['result']['message_id']
-                    dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp)
+                    dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=tgchatid, vkchatid=vkchatid, timestamp=timestamp)
                     dbmsg.put()
 
             if len(media) > 1:
-                tgresult = tgMediaGroup(media=json.dumps(media), chatid=vk2tgid[vkchatid])
+                tgresult = tgMediaGroup(media=json.dumps(media), chatid=tgchatid)
                 tgmsgid = tgresult['result'][0]['message_id']
-                dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp)
+                dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=tgchatid, vkchatid=vkchatid, timestamp=timestamp)
                 dbmsg.put()
             if len(media) == 1:
-                tgresult = tgPhoto(url=vkPhotoUrl, caption=photoCaption, chatid=vk2tgid[vkchatid])
+                tgresult = tgPhoto(url=vkPhotoUrl, caption=photoCaption, chatid=tgchatid)
                 tgmsgid = tgresult['result']['message_id']
-                dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=vk2tgid[vkchatid], vkchatid=vkchatid, timestamp=timestamp)
+                dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=tgchatid, vkchatid=vkchatid, timestamp=timestamp)
                 dbmsg.put()
 
 
