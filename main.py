@@ -39,6 +39,7 @@ class Message(ndb.Model):
 
 class vkUser(ndb.Model):
     name = ndb.StringProperty()
+    avatar = ndb.StringProperty()
 
 def trimReply(text, length):
     if len(text) > length:
@@ -113,6 +114,13 @@ def getVkName(userid):
         vkuser.name = vkname
         vkuser.put()
         return vkname
+
+def getVkAvatar(userid):
+    vkuser = vkUser.get_or_insert(str(userid))
+    vkuser.put()
+    if vkuser.avatar:
+        return vkuser.avatar + ' '
+    return ''
 
 def getVkPhotoUrl(attachment):
     maxsize = 0
@@ -266,8 +274,9 @@ class vkMain(webapp2.RequestHandler):
         geo = post.get('geo')
 
         name = getVkName(fromid)
-        boldname = '<b>' + name + '</b>'
-        boldnamec = '<b>' + name + ':</b> '
+        avatar = getVkAvatar(fromid)
+        boldname = avatar + '<b>' + name + '</b>'
+        boldnamec = avatar + '<b>' + name + ':</b> '
 
         vk2tgid = {}
         for tgchatid in tg2vkid:
