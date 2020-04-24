@@ -87,6 +87,16 @@ def tgLocation(lat, lon, chatid, token=TGBOTTOKEN, reply_to=0):
         'chat_id': chatid,
         'latitude': lat,
         'longitude': lon,
+        'reply_to_message_id': reply_to,
+    })).read()
+    return json.loads(response)
+
+def tgVoice(url, caption, chatid, token=TGBOTTOKEN, reply_to=0):
+    response = urlopen(TGAPIURL + token + '/sendVoice', urlencode({
+        'chat_id': chatid,
+        'voice': url,
+        'caption': caption.encode('utf-8'),
+        'parse_mode': 'HTML',
         'reply_to_message_id': reply_to
     })).read()
     return json.loads(response)
@@ -365,6 +375,8 @@ class vkMain(webapp2.RequestHandler):
                         media.append({'media':vkPhotoUrl,'type':'photo','caption':photoCaption,'parse_mode':'HTML'})
                 elif attachment['type'] == 'sticker':
                     tgresult = tgPhoto(url=getVkStickerUrl(attachment), caption=u'Стикер от ' + boldname, chatid=tgchatid)
+                elif attachment['type'] == 'audio_message':
+                    tgresult = tgVoice(url=attachment['audio_message']['link_ogg'], caption=boldname, chatid=tgchatid, reply_to=reply_to)
                 elif attachment['type'] == 'link':
                     if text == '':
                         tgresult = tgMsg(msg=boldnamec + attachment['link']['url'], chatid=tgchatid)
@@ -411,6 +423,7 @@ class tgHandler(webapp2.RequestHandler):
                 document = message.get('document')
                 video = message.get('video')
                 audio = message.get('audio')
+                voice = message.get('voice')
                 sticker = message.get('sticker')
                 contact = message.get('contact')
                 location = message.get('location')
@@ -446,6 +459,9 @@ class tgHandler(webapp2.RequestHandler):
 
                 if audio:
                     text = '[audio] ' + caption
+
+                if voice:
+                    text = '[voice]'
 
                 if sticker:
                     text = sticker.get('emoji', '')
