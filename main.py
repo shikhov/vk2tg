@@ -41,9 +41,9 @@ class vkUser(ndb.Model):
     name = ndb.StringProperty()
     avatar = ndb.StringProperty()
 
-def trimReply(text, length):
+def trimText(text, length, ellipsis):
     if len(text) > length:
-        return text[:length] + '...'
+        return text[:length] + ellipsis
     return text
 
 def tgMsg(msg, chatid, token=TGBOTTOKEN, disable_preview='false', reply_to=0):
@@ -177,7 +177,7 @@ def getReplyText(message):
             replyname = ''
         else:
             replyname = getTgName(replyfrom) + ': '
-        replytext = u'\u23e9 ' + replyname + trimReply(replytext, 40) + u' \u23ea\n'
+        replytext = u'\u23e9 ' + replyname + trimText(replytext, 40, '[...]') + u' \u23ea\n'
 
     return replytext
 
@@ -302,7 +302,8 @@ class vkMain(webapp2.RequestHandler):
             else:
                 groupname = getVkName(post['owner_id'])
                 nmcreatedby = getVkName(createdby)
-                msg = '<b>' + groupname + ' / ' + nmcreatedby + '</b>\n' + text + '\n' + VKWALL + str(-groupid) + '_' + postid
+                msg = '<b>' + groupname + ' / ' + nmcreatedby + '</b>\n' + trimText(text, 4000, '[...]') + '\n' + VKWALL + str(-groupid) + '_' + postid
+
                 if 'attachments' in post and post['attachments'][0]['type'] == 'photo':
                     photoUrl = getVkPhotoUrl(post['attachments'][0])
                     if photoUrl != '':
@@ -331,7 +332,7 @@ class vkMain(webapp2.RequestHandler):
                 elif attachment['type'] == 'wall':
                     tgMsg(msg=boldnamec + VKWALL + str(attachment['wall']['from_id']) + '_' + str(attachment['wall']['id'] + '\n' + commenturl), chatid=comment[groupid])
                 else:
-                    tgMsg(msg=boldnamec + '[' + attachment['type'] + ']\n' + commenturl, chatid=comment[groupid])
+                    tgMsg(msg=boldnamec + '[' + attachment['type'] + ']\n' + commenturl, chatid=comment[groupid], disable_preview='true')
 
         # chat message
         if body['type'] == 'message_new' and vkchatid in vk2tgid:
