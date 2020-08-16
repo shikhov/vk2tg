@@ -1,0 +1,5 @@
+cron:
+    - description: "DB purge"
+      url: /dbpurge
+      schedule: every monday 05:00
+      timezone: Asia/Yekaterinburg

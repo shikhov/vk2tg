@@ -25,6 +25,7 @@ TGAPIURL = 'https://api.telegram.org/bot'
 VKWALL = 'https://vk.com/wall'
 VKAPIURL = 'https://api.vk.com/method/'
 MIMETYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/tiff', 'image/webp']
+DBPURGEDAYS = 30
 
 appengine.monkeypatch()
 warnings.filterwarnings('ignore', r'urllib3 is using URLFetch', urllib3.contrib.appengine.AppEnginePlatformWarning)
@@ -497,8 +498,17 @@ class tgHandler(webapp2.RequestHandler):
                     dbmsg.put()
 
 
+class dbPurge(webapp2.RequestHandler):
+    def get(self):
+        tspurge = int(time()) - DBPURGEDAYS * 24 * 3600
+        for dbmsg in Message.query(Message.timestamp < tspurge).fetch():
+            dbmsg.key.delete()
+
+
+
 app = webapp2.WSGIApplication([
     ('/', vkHandler),
     ('/tghook', tgHandler),
-    ('/vkmain', vkMain)
+    ('/vkmain', vkMain),
+    ('/dbpurge', dbPurge)
 ])
