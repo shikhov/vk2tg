@@ -341,6 +341,10 @@ class vkMain(webapp2.RequestHandler):
             vkmsgid = post['conversation_message_id']
             tgchatid = vk2tgid[vkchatid]
 
+            # skip events that processed already (dupes)
+            if Message.query(Message.vkmsgid == vkmsgid, Message.vkchatid == vkchatid).fetch():
+                return
+
             # replies
             reply_to = findReplyID(post, vkchatid, tgchatid)
 
