@@ -38,6 +38,10 @@ class Message(ndb.Model):
     timestamp = ndb.IntegerProperty()
     checksum = ndb.IntegerProperty(default=1)
 
+class Event(ndb.Model):
+    eventid = ndb.StringProperty()
+    timestamp = ndb.IntegerProperty()
+
 class vkUser(ndb.Model):
     name = ndb.StringProperty()
     avatar = ndb.StringProperty()
@@ -253,6 +257,11 @@ class vkHandler(webapp2.RequestHandler):
         body = json.loads(self.request.body)
         logging.info(json.dumps(body, indent=4).decode('unicode-escape'))
 
+        # skipping dupes
+        if Event.query(Event.eventid == body['event_id']).fetch():
+            self.response.write('ok')
+            return
+
         # webhook confirmation
         groupid = body['group_id']
         if body['type'] == 'confirmation' and groupid in confirmation:
@@ -271,6 +280,7 @@ class vkMain(webapp2.RequestHandler):
     def post(self):
         body = json.loads(self.request.body)
 
+        event_id = body['event_id']
         post = body['object']
         text = post.get('text')
         vkchatid = post.get('peer_id')
@@ -341,10 +351,6 @@ class vkMain(webapp2.RequestHandler):
             vkmsgid = post['conversation_message_id']
             tgchatid = vk2tgid[vkchatid]
 
-            # skip events that processed already (dupes)
-            if Message.query(Message.vkmsgid == vkmsgid, Message.vkchatid == vkchatid).fetch():
-                return
-
             # replies
             reply_to = findReplyID(post, vkchatid, tgchatid)
 
@@ -406,6 +412,9 @@ class vkMain(webapp2.RequestHandler):
                 tgmsgid = tgresult['result']['message_id']
                 dbmsg = Message(vkmsgid=vkmsgid, tgmsgid=tgmsgid, tgchatid=tgchatid, vkchatid=vkchatid, timestamp=timestamp)
                 dbmsg.put()
+
+        dbevent = Event(eventid=event_id, timestamp=int(time()))
+        dbevent.put()
 
 
 class tgHandler(webapp2.RequestHandler):
@@ -505,8 +514,10 @@ class tgHandler(webapp2.RequestHandler):
 class dbPurge(webapp2.RequestHandler):
     def get(self):
         tspurge = int(time()) - DBPURGEDAYS * 24 * 3600
-        for dbmsg in Message.query(Message.timestamp < tspurge).fetch():
-            dbmsg.key.delete()
+        for entity in Message.query(Message.timestamp < tspurge).fetch():
+            entity.key.delete()
+        for entity in Event.query(Event.timestamp < tspurge).fetch():
+            entity.key.delete()
 
 
 
