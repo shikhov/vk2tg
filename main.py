@@ -307,7 +307,7 @@ class vkMain(webapp2.RequestHandler):
             text = re.sub(r'(\[(id|club)\d+\|(.+?)\])', r'\3', text)
 
         # wall post
-        if body['type'] == 'wall_post_new':
+        if body['type'] == 'wall_post_new' and post['post_type'] != 'suggest':
             if createdby == VKMYID and u'\U0001f479' in text:
                 pass
             else:
