@@ -22,7 +22,7 @@ from config import (TGBOTTOKEN, TGBOTUSERNAME, TIMETRESHOLD, VKAPIVER,
                     tg2vkid, wallpost)
 
 TGAPIURL = 'https://api.telegram.org/bot'
-VKWALL = 'https://vk.com/wall'
+VKWALL = 'vk.com/wall'
 VKAPIURL = 'https://api.vk.com/method/'
 MIMETYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/tiff', 'image/webp']
 DBPURGEDAYS = 30
@@ -292,6 +292,7 @@ class vkMain(webapp2.RequestHandler):
         parentid = str(post.get('post_id'))
         fromid = post.get('from_id')
         createdby = post.get('created_by')
+        signerid = post.get('signer_id')
         geo = post.get('geo')
 
         name = getVkName(fromid)
@@ -312,7 +313,7 @@ class vkMain(webapp2.RequestHandler):
                 pass
             else:
                 groupname = getVkName(post['owner_id'])
-                nmcreatedby = getVkName(createdby)
+                nmcreatedby = getVkName(signerid) if signerid else getVkName(createdby)
                 msg = '<b>' + groupname + ' / ' + nmcreatedby + '</b>\n' + trimText(text, 4000, '[...]') + '\n' + VKWALL + str(-groupid) + '_' + postid
 
                 if 'attachments' in post and post['attachments'][0]['type'] == 'photo':
