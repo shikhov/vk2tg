@@ -294,6 +294,7 @@ class vkMain(webapp2.RequestHandler):
         createdby = post.get('created_by')
         signerid = post.get('signer_id')
         geo = post.get('geo')
+        replytocomment = post.get('reply_to_comment')
 
         name = getVkName(fromid)
         avatar = getVkAvatar(fromid)
@@ -309,31 +310,37 @@ class vkMain(webapp2.RequestHandler):
 
         # wall post
         if body['type'] == 'wall_post_new' and post['post_type'] != 'suggest':
-            if createdby == VKMYID and u'\U0001f479' in text:
-                pass
-            else:
-                groupname = getVkName(post['owner_id'])
-                nmcreatedby = getVkName(signerid) if signerid else getVkName(createdby)
-                msg = '<b>' + groupname + ' / ' + nmcreatedby + '</b>\n' + trimText(text, 4000, '[...]') + '\n' + VKWALL + str(-groupid) + '_' + postid
+            groupname = getVkName(post['owner_id'])
+            nmcreatedby = getVkName(signerid) if signerid else getVkName(createdby)
+            msg = '<b>' + groupname + ' / ' + nmcreatedby + '</b>\n' + trimText(text, 4000, '[...]') + '\n' + VKWALL + str(-groupid) + '_' + postid
 
-                if 'attachments' in post and post['attachments'][0]['type'] == 'photo':
-                    photoUrl = getVkPhotoUrl(post['attachments'][0])
-                    if photoUrl != '':
-                        if len(msg) <= 1024:
-                            tgPhoto(url=photoUrl, caption=msg, chatid=wallpost[groupid])
-                        else:
-                            tgPhoto(url=photoUrl, caption='', chatid=wallpost[groupid])
-                            tgMsg(msg=msg, chatid=wallpost[groupid], disable_preview='true')
+            if 'attachments' in post and post['attachments'][0]['type'] == 'photo':
+                photoUrl = getVkPhotoUrl(post['attachments'][0])
+                if photoUrl != '':
+                    if len(msg) <= 1024:
+                        tgPhoto(url=photoUrl, caption=msg, chatid=wallpost[groupid])
                     else:
+                        tgPhoto(url=photoUrl, caption='', chatid=wallpost[groupid])
                         tgMsg(msg=msg, chatid=wallpost[groupid], disable_preview='true')
                 else:
                     tgMsg(msg=msg, chatid=wallpost[groupid], disable_preview='true')
+            else:
+                tgMsg(msg=msg, chatid=wallpost[groupid], disable_preview='true')
 
         # comment
         if body['type'] == 'wall_reply_new' or body['type'] == 'photo_comment_new':
             commenturl = VKWALL + str(-groupid) + '_' + parentid + '?reply=' + postid
+            reply_to = 0
+            if replytocomment:
+                dbmsgs = Message.query(Message.vkmsgid == replytocomment, Message.vkchatid == groupid, Message.tgchatid == comment[groupid]).fetch(1)
+                for dbmsg in dbmsgs:
+                    reply_to = dbmsg.tgmsgid
             if text:
-                tgMsg(msg=boldnamec + text + '\n' + commenturl, chatid=comment[groupid], disable_preview='true')
+                tgresult = tgMsg(msg=boldnamec + text + '\n' + commenturl, chatid=comment[groupid], disable_preview='true', reply_to=reply_to)
+                tgmsgid = tgresult['result']['message_id']
+                timestamp = int(time())
+                dbmsg = Message(vkmsgid=int(postid), tgmsgid=tgmsgid, tgchatid=comment[groupid], vkchatid=groupid, timestamp=timestamp)
+                dbmsg.put()
             for attachment in post.get('attachments', []):
                 if attachment['type'] == 'photo':
                     tgPhoto(url=getVkPhotoUrl(attachment), caption=boldname + '\n' + commenturl, chatid=comment[groupid])
