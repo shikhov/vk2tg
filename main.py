@@ -306,7 +306,8 @@ class vkMain(webapp2.RequestHandler):
             vk2tgid[2000000000 + tg2vkid[tgchatid]] = tgchatid
 
         if text:
-            text = re.sub(r'(\[(id|club)\d+\|(.+?)\])', r'\3', text)
+            text = re.sub(r'\[(id|club)\d+\|(.+?)\]', r'\2', text)
+            text = re.sub(r'\[(https://vk.com/.+?)\|(.+?)\]', r'<a href="\1">\2</a>', text)
 
         # wall post
         if body['type'] == 'wall_post_new' and post['post_type'] != 'suggest':
